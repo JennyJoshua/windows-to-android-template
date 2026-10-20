@@ -1,0 +1,39 @@
+name: Test Safe Extraction Script
+
+on:
+  push:
+    paths:
+      - "scripts/**"
+      - "tests/**"
+      - ".github/workflows/test-extraction-script.yml"
+  pull_request:
+    paths:
+      - "scripts/**"
+      - "tests/**"
+      - ".github/workflows/test-extraction-script.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: safe-extraction-tests
+  cancel-in-progress: false
+
+jobs:
+  test:
+    name: Run Python Security Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Run extraction security tests
+        run: python -m unittest discover -s tests -v
