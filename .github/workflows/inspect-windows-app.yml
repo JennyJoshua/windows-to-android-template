@@ -1,0 +1,78 @@
+name: Inspect Windows Application ZIP
+
+on:
+  push:
+    paths:
+      - "_inbox/*.zip"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-app-inspection
+  cancel-in-progress: false
+
+jobs:
+  inspect-and-extract:
+    name: Validate and Extract Source Archive
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Prepare workspace
+        run: |
+          mkdir -p inspection-output/reports
+          mkdir -p inspection-output/extracted
+          mkdir -p _inbox
+
+      - name: Find and validate uploaded ZIP
+        id: inspect
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          mapfile -t archives < <(
+            find _inbox -maxdepth 1 -type f \
+              -iname '*.zip' -print | sort
+          )
+
+          if [ "${#archives[@]}" -eq 0 ]; then
+            echo "No ZIP archives found in _inbox/."
+            echo "Upload a Windows application source ZIP first."
+            exit 1
+          fi
+
+          if [ "${#archives[@]}" -ne 1 ]; then
+            echo "Please submit one ZIP archive at a time."
+            echo "Found ${#archives[@]} ZIP archives."
+            exit 1
+          fi
+
+          archive="${archives[0]}"
+          filename="$(basename "$archive")"
+          project_name="${filename%.*}"
+
+          echo "Processing: $filename"
+
+          python scripts/safe_extract.py \
+            "$archive" \
+            "inspection-output/extracted/$project_name" \
+            --report "inspection-output/reports/inspection.json"
+
+      - name: Upload inspection results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-app-inspection-${{ github.run_number }}
+          path: inspection-output/
+          if-no-files-found: warn
+          retention-days: 7
